@@ -101,6 +101,36 @@ export const useOrders = () => {
     }
   }, [fetchOrders]);
 
+  const deleteOrder = useCallback(async (orderId: string) => {
+    try {
+      setError(null);
+
+      // First delete order items (due to foreign key constraint)
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (itemsError) throw itemsError;
+
+      // Then delete the order
+      const { error: deleteError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (deleteError) throw deleteError;
+
+      // Refresh orders list
+      await fetchOrders();
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      const message = err instanceof Error ? err.message : 'Failed to delete order';
+      setError(message);
+      throw err;
+    }
+  }, [fetchOrders]);
+
   const createOrder = useCallback(async (payload: CreateOrderPayload) => {
     try {
       setCreating(true);
@@ -248,6 +278,7 @@ export const useOrders = () => {
     orders, 
     loading, 
     fetchOrders, 
-    updateOrderStatus 
+    updateOrderStatus,
+    deleteOrder
   };
 };

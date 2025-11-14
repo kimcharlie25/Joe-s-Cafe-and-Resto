@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle, Clock, XCircle, RefreshCw, ChevronDown, Search, Image as ImageIcon, Download, Calendar, DollarSign, Printer } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock, XCircle, RefreshCw, ChevronDown, Search, Image as ImageIcon, Download, Calendar, DollarSign, Printer, Trash2 } from 'lucide-react';
 import { useOrders, OrderWithItems } from '../hooks/useOrders';
 
 interface OrdersManagerProps {
@@ -7,9 +7,10 @@ interface OrdersManagerProps {
 }
 
 const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
-  const { orders, loading, error, updateOrderStatus } = useOrders();
+  const { orders, loading, error, updateOrderStatus, deleteOrder } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('all');
   const [sortKey, setSortKey] = useState<'created_at' | 'total' | 'customer_name' | 'status'>('created_at');
@@ -64,6 +65,24 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       alert('Failed to update order status');
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
+    if (!window.confirm(`Are you sure you want to delete Order #${orderNumber}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeleting(orderId);
+      await deleteOrder(orderId);
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(null);
+      }
+    } catch (err) {
+      alert('Failed to delete order. Please try again.');
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -791,6 +810,18 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                               <option value="completed">Completed</option>
                               <option value="cancelled">Cancelled</option>
                             </select>
+                            <button
+                              onClick={() => handleDeleteOrder(order.id, order.id.slice(-8).toUpperCase())}
+                              disabled={deleting === order.id}
+                              className="px-3 py-1.5 border border-red-300 rounded-lg hover:bg-red-50 text-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              title="Delete order"
+                            >
+                              {deleting === order.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
                             {updating === order.id && (
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                             )}
@@ -844,6 +875,18 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
+                      <button
+                        onClick={() => handleDeleteOrder(order.id, order.id.slice(-8).toUpperCase())}
+                        disabled={deleting === order.id}
+                        className="px-3 py-2 border border-red-300 rounded-lg hover:bg-red-50 text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete order"
+                      >
+                        {deleting === order.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -871,6 +914,18 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 >
                   <Printer className="h-4 w-4" />
                   Print Receipt
+                </button>
+                <button
+                  onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.id.slice(-8).toUpperCase())}
+                  disabled={deleting === selectedOrder.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleting === selectedOrder.id ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete
                 </button>
                 <button
                   onClick={() => setSelectedOrder(null)}

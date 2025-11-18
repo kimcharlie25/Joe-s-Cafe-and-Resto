@@ -242,33 +242,52 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       return;
     }
 
+    // Find the latest order data from the orders array to ensure we have the most current data
+    const latestOrder = orders.find(o => o.id === order.id) || order;
+    
     // Create a safe copy of order data to prevent closure issues
     const orderData = {
-      id: order.id,
-      customer_name: order.customer_name || '',
-      contact_number: order.contact_number || '',
-      service_type: order.service_type || 'dine-in',
-      address: order.address || null,
-      pickup_time: order.pickup_time || null,
-      party_size: order.party_size || null,
-      dine_in_time: order.dine_in_time || null,
-      payment_method: order.payment_method || '',
-      notes: order.notes || null,
-      total: order.total || 0,
-      status: order.status || 'pending',
-      created_at: order.created_at || new Date().toISOString(),
+      id: latestOrder.id,
+      customer_name: latestOrder.customer_name || '',
+      contact_number: latestOrder.contact_number || '',
+      service_type: latestOrder.service_type || 'dine-in',
+      address: latestOrder.address || null,
+      pickup_time: latestOrder.pickup_time || null,
+      party_size: latestOrder.party_size || null,
+      dine_in_time: latestOrder.dine_in_time || null,
+      payment_method: latestOrder.payment_method || '',
+      notes: latestOrder.notes || null,
+      total: latestOrder.total || 0,
+      status: latestOrder.status || 'pending',
+      created_at: latestOrder.created_at || new Date().toISOString(),
     };
 
-    // Ensure order_items exists and is an array
-    const orderItems = Array.isArray(order.order_items) ? order.order_items.map(item => ({
-      id: item.id,
-      name: item.name || 'Unknown Item',
-      variation: item.variation,
-      add_ons: item.add_ons,
-      unit_price: item.unit_price || 0,
-      quantity: item.quantity || 1,
-      subtotal: item.subtotal || (item.unit_price || 0) * (item.quantity || 1),
-    })) : [];
+    // Ensure order_items exists and is an array - use the latest order's items
+    const latestOrderItems = Array.isArray(latestOrder.order_items) ? latestOrder.order_items : [];
+    const orderItems = latestOrderItems.map(item => {
+      // Safely extract item data
+      const itemName = item.name || 'Unknown Item';
+      const itemVariation = item.variation;
+      const itemAddOns = item.add_ons;
+      const itemUnitPrice = typeof item.unit_price === 'number' ? item.unit_price : parseFloat(item.unit_price) || 0;
+      const itemQuantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 1;
+      const itemSubtotal = typeof item.subtotal === 'number' ? item.subtotal : parseFloat(item.subtotal) || (itemUnitPrice * itemQuantity);
+      
+      return {
+        id: item.id || '',
+        name: itemName,
+        variation: itemVariation,
+        add_ons: itemAddOns,
+        unit_price: itemUnitPrice,
+        quantity: itemQuantity,
+        subtotal: itemSubtotal,
+      };
+    });
+    
+    // Debug logging (can be removed in production)
+    console.log('Printing receipt for order:', orderData.id);
+    console.log('Order items count:', orderItems.length);
+    console.log('Order total:', orderData.total);
     
     const formatServiceTypeDisplay = (serviceType: string) => {
       return serviceType === 'over-the-counter' 
@@ -308,6 +327,10 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     
     // For mobile, use iframe approach which is more reliable
     if (isMobile) {
+      // Hide parent page content during printing
+      const originalBodyDisplay = document.body.style.display;
+      const originalHtmlDisplay = document.documentElement.style.display;
+      
       // Create a hidden iframe for mobile printing
       const iframe = document.createElement('iframe');
       iframe.style.position = 'fixed';
@@ -316,6 +339,8 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       iframe.style.width = '0';
       iframe.style.height = '0';
       iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
       document.body.appendChild(iframe);
 
       const receiptHTML = `
@@ -330,10 +355,15 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   margin: 0;
                   size: 58mm auto;
                 }
-                body {
-                  margin: 0;
-                  padding: 10px;
-                  width: 58mm;
+                html, body {
+                  margin: 0 !important;
+                  padding: 10px !important;
+                  width: 58mm !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                }
+                body * {
+                  visibility: visible;
                 }
                 .no-print {
                   display: none !important;
@@ -343,6 +373,12 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
+              }
+              html {
+                width: 58mm;
+                max-width: 58mm;
+                margin: 0;
+                padding: 0;
               }
               body {
                 font-family: 'Courier New', monospace;
@@ -354,6 +390,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 font-size: 12px;
                 line-height: 1.3;
                 background: white;
+                overflow: visible;
               }
               .header {
                 text-align: center;
@@ -486,11 +523,11 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Customer:</span>
-                <span>${orderData.customer_name}</span>
+                <span>${String(orderData.customer_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               <div class="info-row">
                 <span>Contact:</span>
-                <span>${orderData.contact_number}</span>
+                <span>${String(orderData.contact_number || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               <div class="info-row">
                 <span>Service:</span>
@@ -499,13 +536,13 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               ${orderData.address ? `
               <div class="info-row">
                 <span>Address:</span>
-                <span style="text-align: right; max-width: 60%;">${orderData.address}</span>
+                <span style="text-align: right; max-width: 60%;">${String(orderData.address).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               ` : ''}
               ${orderData.pickup_time ? `
               <div class="info-row">
                 <span>Pickup:</span>
-                <span>${orderData.pickup_time}</span>
+                <span>${String(orderData.pickup_time).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               ` : ''}
               ${orderData.party_size ? `
@@ -522,30 +559,31 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               ` : ''}
               <div class="info-row">
                 <span>Payment:</span>
-                <span>${orderData.payment_method}</span>
+                <span>${String(orderData.payment_method || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
             </div>
 
             <div class="divider"></div>
 
             <div class="items-section">
-              ${orderItems.map(item => {
-                const itemName = item.name || 'Unknown Item';
+              ${orderItems.length > 0 ? orderItems.map(item => {
+                const itemName = String(item.name || 'Unknown Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 let itemDetails = '';
                 const variationName = getVariationName(item.variation);
                 if (variationName) {
-                  itemDetails += `<div class="item-details">Size: ${variationName}</div>`;
+                  itemDetails += `<div class="item-details">Size: ${String(variationName).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
                 }
                 const addOns = getAddOns(item.add_ons);
                 if (addOns && addOns.length > 0) {
-                  const addOnsList = addOns.map((addon: any) => 
-                    addon.quantity > 1 ? `${addon.name} x${addon.quantity}` : addon.name
-                  ).join(', ');
+                  const addOnsList = addOns.map((addon: any) => {
+                    const addonName = String(addon.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return addon.quantity > 1 ? `${addonName} x${addon.quantity}` : addonName;
+                  }).join(', ');
                   itemDetails += `<div class="item-details">+ ${addOnsList}</div>`;
                 }
-                const quantity = item.quantity || 1;
-                const unitPrice = item.unit_price || 0;
-                const subtotal = item.subtotal || (unitPrice * quantity);
+                const quantity = Number(item.quantity) || 1;
+                const unitPrice = Number(item.unit_price) || 0;
+                const subtotal = Number(item.subtotal) || (unitPrice * quantity);
                 return `
                   <div class="item-row">
                     <div class="item-name">${itemName}</div>
@@ -558,7 +596,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                     </div>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : '<div class="item-row"><div class="item-name">No items found</div></div>'}
             </div>
 
             <div class="divider"></div>
@@ -574,7 +612,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="divider"></div>
             <div class="info-section">
               <div style="font-size: 10px;">
-                <strong>Notes:</strong> ${orderData.notes}
+                <strong>Notes:</strong> ${String(orderData.notes).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               </div>
             </div>
             ` : ''}
@@ -609,20 +647,52 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         // Wait for content to load, then trigger print
         setTimeout(() => {
           if (iframe.contentWindow) {
+            // Add print event listener to hide parent page
+            const handleBeforePrint = () => {
+              document.body.style.display = 'none';
+              document.documentElement.style.display = 'none';
+            };
+            
+            const handleAfterPrint = () => {
+              document.body.style.display = originalBodyDisplay;
+              document.documentElement.style.display = originalHtmlDisplay;
+              setTimeout(() => {
+                if (iframe.parentNode) {
+                  document.body.removeChild(iframe);
+                }
+              }, 100);
+            };
+            
+            // Listen for print events
+            iframe.contentWindow.addEventListener('beforeprint', handleBeforePrint);
+            iframe.contentWindow.addEventListener('afterprint', handleAfterPrint);
+            
+            // Also hide parent page as fallback
+            document.body.style.display = 'none';
+            document.documentElement.style.display = 'none';
+            
             iframe.contentWindow.focus();
             iframe.contentWindow.print();
+            
+            // Restore parent page after printing (fallback)
+            setTimeout(() => {
+              document.body.style.display = originalBodyDisplay;
+              document.documentElement.style.display = originalHtmlDisplay;
+              if (iframe.parentNode) {
+                document.body.removeChild(iframe);
+              }
+            }, 2000);
           }
-          // Clean up after printing
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-          }, 1000);
         }, 250);
       }
     } else {
       // Desktop: Use window.open approach
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open('', '_blank', 'width=300,height=600');
       if (!printWindow) {
         // Fallback to iframe if popup is blocked
+        const originalBodyDisplay = document.body.style.display;
+        const originalHtmlDisplay = document.documentElement.style.display;
+        
         const iframe = document.createElement('iframe');
         iframe.style.position = 'fixed';
         iframe.style.right = '0';
@@ -630,6 +700,8 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
         document.body.appendChild(iframe);
 
         const receiptHTML = `
@@ -643,10 +715,15 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                     margin: 0;
                     size: 58mm auto;
                   }
-                  body {
-                    margin: 0;
-                    padding: 10px;
-                    width: 58mm;
+                  html, body {
+                    margin: 0 !important;
+                    padding: 10px !important;
+                    width: 58mm !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                  }
+                  body * {
+                    visibility: visible;
                   }
                   .no-print {
                     display: none !important;
@@ -657,6 +734,12 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   padding: 0;
                   box-sizing: border-box;
                 }
+                html {
+                  width: 58mm;
+                  max-width: 58mm;
+                  margin: 0;
+                  padding: 0;
+                }
                 body {
                   font-family: 'Courier New', monospace;
                   width: 58mm;
@@ -666,6 +749,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   color: #000;
                   font-size: 12px;
                   line-height: 1.3;
+                  overflow: visible;
                 }
                 .header {
                   text-align: center;
@@ -915,12 +999,42 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
           
           setTimeout(() => {
             if (iframe.contentWindow) {
+              // Add print event listener to hide parent page
+              const handleBeforePrint = () => {
+                document.body.style.display = 'none';
+                document.documentElement.style.display = 'none';
+              };
+              
+              const handleAfterPrint = () => {
+                document.body.style.display = originalBodyDisplay;
+                document.documentElement.style.display = originalHtmlDisplay;
+                setTimeout(() => {
+                  if (iframe.parentNode) {
+                    document.body.removeChild(iframe);
+                  }
+                }, 100);
+              };
+              
+              // Listen for print events
+              iframe.contentWindow.addEventListener('beforeprint', handleBeforePrint);
+              iframe.contentWindow.addEventListener('afterprint', handleAfterPrint);
+              
+              // Also hide parent page as fallback
+              document.body.style.display = 'none';
+              document.documentElement.style.display = 'none';
+              
               iframe.contentWindow.focus();
               iframe.contentWindow.print();
+              
+              // Restore parent page after printing (fallback)
+              setTimeout(() => {
+                document.body.style.display = originalBodyDisplay;
+                document.documentElement.style.display = originalHtmlDisplay;
+                if (iframe.parentNode) {
+                  document.body.removeChild(iframe);
+                }
+              }, 2000);
             }
-            setTimeout(() => {
-              document.body.removeChild(iframe);
-            }, 1000);
           }, 250);
         }
         return;
@@ -937,19 +1051,30 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   margin: 0;
                   size: 58mm auto;
                 }
-                body {
-                  margin: 0;
-                  padding: 10px;
-                  width: 58mm;
+                html, body {
+                  margin: 0 !important;
+                  padding: 10px !important;
+                  width: 58mm !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                }
+                body * {
+                  visibility: visible;
                 }
                 .no-print {
-                  display: none;
+                  display: none !important;
                 }
               }
               * {
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
+              }
+              html {
+                width: 58mm;
+                max-width: 58mm;
+                margin: 0;
+                padding: 0;
               }
               body {
                 font-family: 'Courier New', monospace;
@@ -960,6 +1085,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 color: #000;
                 font-size: 12px;
                 line-height: 1.3;
+                overflow: visible;
               }
               .header {
                 text-align: center;
@@ -1092,11 +1218,11 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Customer:</span>
-                <span>${orderData.customer_name}</span>
+                <span>${String(orderData.customer_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               <div class="info-row">
                 <span>Contact:</span>
-                <span>${orderData.contact_number}</span>
+                <span>${String(orderData.contact_number || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               <div class="info-row">
                 <span>Service:</span>
@@ -1105,13 +1231,13 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               ${orderData.address ? `
               <div class="info-row">
                 <span>Address:</span>
-                <span style="text-align: right; max-width: 60%;">${orderData.address}</span>
+                <span style="text-align: right; max-width: 60%;">${String(orderData.address).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               ` : ''}
               ${orderData.pickup_time ? `
               <div class="info-row">
                 <span>Pickup:</span>
-                <span>${orderData.pickup_time}</span>
+                <span>${String(orderData.pickup_time).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
               ` : ''}
               ${orderData.party_size ? `
@@ -1128,30 +1254,31 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               ` : ''}
               <div class="info-row">
                 <span>Payment:</span>
-                <span>${orderData.payment_method}</span>
+                <span>${String(orderData.payment_method || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
               </div>
             </div>
 
             <div class="divider"></div>
 
             <div class="items-section">
-              ${orderItems.map(item => {
-                const itemName = item.name || 'Unknown Item';
+              ${orderItems.length > 0 ? orderItems.map(item => {
+                const itemName = String(item.name || 'Unknown Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 let itemDetails = '';
                 const variationName = getVariationName(item.variation);
                 if (variationName) {
-                  itemDetails += `<div class="item-details">Size: ${variationName}</div>`;
+                  itemDetails += `<div class="item-details">Size: ${String(variationName).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
                 }
                 const addOns = getAddOns(item.add_ons);
                 if (addOns && addOns.length > 0) {
-                  const addOnsList = addOns.map((addon: any) => 
-                    addon.quantity > 1 ? `${addon.name} x${addon.quantity}` : addon.name
-                  ).join(', ');
+                  const addOnsList = addOns.map((addon: any) => {
+                    const addonName = String(addon.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return addon.quantity > 1 ? `${addonName} x${addon.quantity}` : addonName;
+                  }).join(', ');
                   itemDetails += `<div class="item-details">+ ${addOnsList}</div>`;
                 }
-                const quantity = item.quantity || 1;
-                const unitPrice = item.unit_price || 0;
-                const subtotal = item.subtotal || (unitPrice * quantity);
+                const quantity = Number(item.quantity) || 1;
+                const unitPrice = Number(item.unit_price) || 0;
+                const subtotal = Number(item.subtotal) || (unitPrice * quantity);
                 return `
                   <div class="item-row">
                     <div class="item-name">${itemName}</div>
@@ -1164,7 +1291,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                     </div>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : '<div class="item-row"><div class="item-name">No items found</div></div>'}
             </div>
 
             <div class="divider"></div>
@@ -1180,7 +1307,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="divider"></div>
             <div class="info-section">
               <div style="font-size: 10px;">
-                <strong>Notes:</strong> ${orderData.notes}
+                <strong>Notes:</strong> ${String(orderData.notes).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               </div>
             </div>
             ` : ''}

@@ -236,10 +236,71 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   };
 
   const handlePrintReceipt = (order: OrderWithItems) => {
+    // Ensure we have valid order data
+    if (!order || !order.id) {
+      alert('Invalid order data. Cannot generate receipt.');
+      return;
+    }
+
+    // Create a safe copy of order data to prevent closure issues
+    const orderData = {
+      id: order.id,
+      customer_name: order.customer_name || '',
+      contact_number: order.contact_number || '',
+      service_type: order.service_type || 'dine-in',
+      address: order.address || null,
+      pickup_time: order.pickup_time || null,
+      party_size: order.party_size || null,
+      dine_in_time: order.dine_in_time || null,
+      payment_method: order.payment_method || '',
+      notes: order.notes || null,
+      total: order.total || 0,
+      status: order.status || 'pending',
+      created_at: order.created_at || new Date().toISOString(),
+    };
+
+    // Ensure order_items exists and is an array
+    const orderItems = Array.isArray(order.order_items) ? order.order_items.map(item => ({
+      id: item.id,
+      name: item.name || 'Unknown Item',
+      variation: item.variation,
+      add_ons: item.add_ons,
+      unit_price: item.unit_price || 0,
+      quantity: item.quantity || 1,
+      subtotal: item.subtotal || (item.unit_price || 0) * (item.quantity || 1),
+    })) : [];
+    
     const formatServiceTypeDisplay = (serviceType: string) => {
       return serviceType === 'over-the-counter' 
         ? 'Over the Counter' 
         : serviceType.charAt(0).toUpperCase() + serviceType.slice(1).replace(/-/g, ' ');
+    };
+
+    // Helper function to safely get variation name
+    const getVariationName = (variation: any): string => {
+      if (!variation) return '';
+      if (typeof variation === 'string') {
+        try {
+          const parsed = JSON.parse(variation);
+          return parsed?.name || '';
+        } catch {
+          return '';
+        }
+      }
+      return variation?.name || '';
+    };
+
+    // Helper function to safely get add-ons
+    const getAddOns = (addOns: any): any[] => {
+      if (!addOns) return [];
+      if (typeof addOns === 'string') {
+        try {
+          return JSON.parse(addOns);
+        } catch {
+          return [];
+        }
+      }
+      return Array.isArray(addOns) ? addOns : [];
     };
 
     // Detect if we're on mobile
@@ -261,7 +322,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Receipt - Order #${order.id.slice(-8).toUpperCase()}</title>
+            <title>Receipt - Order #${orderData.id.slice(-8).toUpperCase()}</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
               @media print {
@@ -404,19 +465,19 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Order #:</span>
-                <span>${order.id.slice(-8).toUpperCase()}</span>
+                <span>${orderData.id.slice(-8).toUpperCase()}</span>
               </div>
               <div class="info-row">
                 <span>Date:</span>
-                <span>${new Date(order.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                <span>${new Date(orderData.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
               </div>
               <div class="info-row">
                 <span>Time:</span>
-                <span>${new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>${new Date(orderData.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               <div class="info-row">
                 <span>Status:</span>
-                <span>${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
+                <span>${orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}</span>
               </div>
             </div>
 
@@ -425,69 +486,74 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Customer:</span>
-                <span>${order.customer_name}</span>
+                <span>${orderData.customer_name}</span>
               </div>
               <div class="info-row">
                 <span>Contact:</span>
-                <span>${order.contact_number}</span>
+                <span>${orderData.contact_number}</span>
               </div>
               <div class="info-row">
                 <span>Service:</span>
-                <span>${formatServiceTypeDisplay(order.service_type)}</span>
+                <span>${formatServiceTypeDisplay(orderData.service_type)}</span>
               </div>
-              ${order.address ? `
+              ${orderData.address ? `
               <div class="info-row">
                 <span>Address:</span>
-                <span style="text-align: right; max-width: 60%;">${order.address}</span>
+                <span style="text-align: right; max-width: 60%;">${orderData.address}</span>
               </div>
               ` : ''}
-              ${order.pickup_time ? `
+              ${orderData.pickup_time ? `
               <div class="info-row">
                 <span>Pickup:</span>
-                <span>${order.pickup_time}</span>
+                <span>${orderData.pickup_time}</span>
               </div>
               ` : ''}
-              ${order.party_size ? `
+              ${orderData.party_size ? `
               <div class="info-row">
                 <span>Party:</span>
-                <span>${order.party_size} person${order.party_size !== 1 ? 's' : ''}</span>
+                <span>${orderData.party_size} person${orderData.party_size !== 1 ? 's' : ''}</span>
               </div>
               ` : ''}
-              ${order.dine_in_time ? `
+              ${orderData.dine_in_time ? `
               <div class="info-row">
                 <span>Dine-in:</span>
-                <span>${new Date(order.dine_in_time).toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                <span>${new Date(orderData.dine_in_time).toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               ` : ''}
               <div class="info-row">
                 <span>Payment:</span>
-                <span>${order.payment_method}</span>
+                <span>${orderData.payment_method}</span>
               </div>
             </div>
 
             <div class="divider"></div>
 
             <div class="items-section">
-              ${order.order_items.map(item => {
-                let itemName = item.name;
+              ${orderItems.map(item => {
+                const itemName = item.name || 'Unknown Item';
                 let itemDetails = '';
-                if (item.variation) {
-                  itemDetails += `<div class="item-details">Size: ${item.variation.name}</div>`;
+                const variationName = getVariationName(item.variation);
+                if (variationName) {
+                  itemDetails += `<div class="item-details">Size: ${variationName}</div>`;
                 }
-                if (item.add_ons && item.add_ons.length > 0) {
-                  const addOnsList = item.add_ons.map((addon: any) => 
+                const addOns = getAddOns(item.add_ons);
+                if (addOns && addOns.length > 0) {
+                  const addOnsList = addOns.map((addon: any) => 
                     addon.quantity > 1 ? `${addon.name} x${addon.quantity}` : addon.name
                   ).join(', ');
                   itemDetails += `<div class="item-details">+ ${addOnsList}</div>`;
                 }
+                const quantity = item.quantity || 1;
+                const unitPrice = item.unit_price || 0;
+                const subtotal = item.subtotal || (unitPrice * quantity);
                 return `
                   <div class="item-row">
                     <div class="item-name">${itemName}</div>
                     ${itemDetails}
                     <div class="item-line">
                       <div class="item-qty-price">
-                        <span>${item.quantity}x ₱${item.unit_price.toFixed(2)}</span>
-                        <span>₱${item.subtotal.toFixed(2)}</span>
+                        <span>${quantity}x ₱${unitPrice.toFixed(2)}</span>
+                        <span>₱${subtotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -500,15 +566,15 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="total-section">
               <div class="total-row">
                 <span>TOTAL:</span>
-                <span>₱${order.total.toFixed(2)}</span>
+                <span>₱${orderData.total.toFixed(2)}</span>
               </div>
             </div>
 
-            ${order.notes ? `
+            ${orderData.notes ? `
             <div class="divider"></div>
             <div class="info-section">
               <div style="font-size: 10px;">
-                <strong>Notes:</strong> ${order.notes}
+                <strong>Notes:</strong> ${orderData.notes}
               </div>
             </div>
             ` : ''}
@@ -517,7 +583,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
             <div class="footer">
               <p>Thank you for your order!</p>
-              <p>Order #${order.id.slice(-8).toUpperCase()}</p>
+              <p>Order #${orderData.id.slice(-8).toUpperCase()}</p>
               <p style="margin-top: 5px;">${new Date().toLocaleString('en-US', { 
                 month: 'short', 
                 day: 'numeric',
@@ -570,7 +636,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
           <!DOCTYPE html>
           <html>
             <head>
-              <title>Receipt - Order #${order.id.slice(-8).toUpperCase()}</title>
+              <title>Receipt - Order #${orderData.id.slice(-8).toUpperCase()}</title>
               <style>
                 @media print {
                   @page {
@@ -864,7 +930,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Receipt - Order #${order.id.slice(-8).toUpperCase()}</title>
+            <title>Receipt - Order #${orderData.id.slice(-8).toUpperCase()}</title>
             <style>
               @media print {
                 @page {
@@ -1005,19 +1071,19 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Order #:</span>
-                <span>${order.id.slice(-8).toUpperCase()}</span>
+                <span>${orderData.id.slice(-8).toUpperCase()}</span>
               </div>
               <div class="info-row">
                 <span>Date:</span>
-                <span>${new Date(order.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                <span>${new Date(orderData.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
               </div>
               <div class="info-row">
                 <span>Time:</span>
-                <span>${new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>${new Date(orderData.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               <div class="info-row">
                 <span>Status:</span>
-                <span>${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
+                <span>${orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}</span>
               </div>
             </div>
 
@@ -1026,69 +1092,74 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="info-section">
               <div class="info-row">
                 <span class="info-label">Customer:</span>
-                <span>${order.customer_name}</span>
+                <span>${orderData.customer_name}</span>
               </div>
               <div class="info-row">
                 <span>Contact:</span>
-                <span>${order.contact_number}</span>
+                <span>${orderData.contact_number}</span>
               </div>
               <div class="info-row">
                 <span>Service:</span>
-                <span>${formatServiceTypeDisplay(order.service_type)}</span>
+                <span>${formatServiceTypeDisplay(orderData.service_type)}</span>
               </div>
-              ${order.address ? `
+              ${orderData.address ? `
               <div class="info-row">
                 <span>Address:</span>
-                <span style="text-align: right; max-width: 60%;">${order.address}</span>
+                <span style="text-align: right; max-width: 60%;">${orderData.address}</span>
               </div>
               ` : ''}
-              ${order.pickup_time ? `
+              ${orderData.pickup_time ? `
               <div class="info-row">
                 <span>Pickup:</span>
-                <span>${order.pickup_time}</span>
+                <span>${orderData.pickup_time}</span>
               </div>
               ` : ''}
-              ${order.party_size ? `
+              ${orderData.party_size ? `
               <div class="info-row">
                 <span>Party:</span>
-                <span>${order.party_size} person${order.party_size !== 1 ? 's' : ''}</span>
+                <span>${orderData.party_size} person${orderData.party_size !== 1 ? 's' : ''}</span>
               </div>
               ` : ''}
-              ${order.dine_in_time ? `
+              ${orderData.dine_in_time ? `
               <div class="info-row">
                 <span>Dine-in:</span>
-                <span>${new Date(order.dine_in_time).toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                <span>${new Date(orderData.dine_in_time).toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               ` : ''}
               <div class="info-row">
                 <span>Payment:</span>
-                <span>${order.payment_method}</span>
+                <span>${orderData.payment_method}</span>
               </div>
             </div>
 
             <div class="divider"></div>
 
             <div class="items-section">
-              ${order.order_items.map(item => {
-                let itemName = item.name;
+              ${orderItems.map(item => {
+                const itemName = item.name || 'Unknown Item';
                 let itemDetails = '';
-                if (item.variation) {
-                  itemDetails += `<div class="item-details">Size: ${item.variation.name}</div>`;
+                const variationName = getVariationName(item.variation);
+                if (variationName) {
+                  itemDetails += `<div class="item-details">Size: ${variationName}</div>`;
                 }
-                if (item.add_ons && item.add_ons.length > 0) {
-                  const addOnsList = item.add_ons.map((addon: any) => 
+                const addOns = getAddOns(item.add_ons);
+                if (addOns && addOns.length > 0) {
+                  const addOnsList = addOns.map((addon: any) => 
                     addon.quantity > 1 ? `${addon.name} x${addon.quantity}` : addon.name
                   ).join(', ');
                   itemDetails += `<div class="item-details">+ ${addOnsList}</div>`;
                 }
+                const quantity = item.quantity || 1;
+                const unitPrice = item.unit_price || 0;
+                const subtotal = item.subtotal || (unitPrice * quantity);
                 return `
                   <div class="item-row">
                     <div class="item-name">${itemName}</div>
                     ${itemDetails}
                     <div class="item-line">
                       <div class="item-qty-price">
-                        <span>${item.quantity}x ₱${item.unit_price.toFixed(2)}</span>
-                        <span>₱${item.subtotal.toFixed(2)}</span>
+                        <span>${quantity}x ₱${unitPrice.toFixed(2)}</span>
+                        <span>₱${subtotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1101,15 +1172,15 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <div class="total-section">
               <div class="total-row">
                 <span>TOTAL:</span>
-                <span>₱${order.total.toFixed(2)}</span>
+                <span>₱${orderData.total.toFixed(2)}</span>
               </div>
             </div>
 
-            ${order.notes ? `
+            ${orderData.notes ? `
             <div class="divider"></div>
             <div class="info-section">
               <div style="font-size: 10px;">
-                <strong>Notes:</strong> ${order.notes}
+                <strong>Notes:</strong> ${orderData.notes}
               </div>
             </div>
             ` : ''}
@@ -1118,7 +1189,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
             <div class="footer">
               <p>Thank you for your order!</p>
-              <p>Order #${order.id.slice(-8).toUpperCase()}</p>
+              <p>Order #${orderData.id.slice(-8).toUpperCase()}</p>
               <p style="margin-top: 5px;">${new Date().toLocaleString('en-US', { 
                 month: 'short', 
                 day: 'numeric',

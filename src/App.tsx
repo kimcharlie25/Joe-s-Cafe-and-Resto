@@ -10,6 +10,7 @@ import OrderTracking from './components/OrderTracking';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
+import BarCounter from './components/BarCounter';
 import { useMenu } from './hooks/useMenu';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -91,6 +92,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<MainApp />} />
+          <Route path="/barcounter" element={<BarCounter />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route 
             path="/admin" 

@@ -42,13 +42,15 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
           </button>
 
           <div className="flex items-center space-x-3">
-            <button 
-              onClick={onOrderTrackingClick}
-              className="flex items-center gap-2 px-4 py-2 text-white hover:text-white hover:bg-primary-700 rounded-lg transition-all duration-200 text-sm font-medium"
-            >
-              <Package className="h-5 w-5" />
-              <span className="hidden sm:inline">Track Order</span>
-            </button>
+            {onOrderTrackingClick && (
+              <button 
+                onClick={onOrderTrackingClick}
+                className="flex items-center gap-2 px-4 py-2 text-white hover:text-white hover:bg-primary-700 rounded-lg transition-all duration-200 text-sm font-medium"
+              >
+                <Package className="h-5 w-5" />
+                <span className="hidden sm:inline">Track Order</span>
+              </button>
+            )}
             <button 
               onClick={onCartClick}
               className="relative p-3 text-white hover:text-white hover:bg-primary-700 rounded-full transition-all duration-200"

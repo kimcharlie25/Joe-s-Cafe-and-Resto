@@ -1,23 +1,145 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle, Clock, XCircle, RefreshCw, ChevronDown, Search, Image as ImageIcon, Download, Calendar, DollarSign, Printer, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock, XCircle, RefreshCw, ChevronDown, Search, Image as ImageIcon, Download, Calendar, DollarSign, Printer, Trash2, Lock, Eye, EyeOff, X } from 'lucide-react';
 import { useOrders, OrderWithItems } from '../hooks/useOrders';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface OrdersManagerProps {
   onBack: () => void;
 }
 
+interface PasswordVerificationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onVerify: (password: string) => Promise<boolean>;
+  orderNumber: string;
+}
+
+const PasswordVerificationModal: React.FC<PasswordVerificationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onVerify, 
+  orderNumber 
+}) => {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setVerifying(true);
+
+    try {
+      const isValid = await onVerify(password);
+      if (isValid) {
+        setPassword('');
+        onClose();
+      } else {
+        setError('Incorrect password. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to verify password. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="bg-red-100 rounded-full p-2">
+                <Lock className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Verify Password</h3>
+                <p className="text-sm text-gray-500">Delete Order #{orderNumber}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Admin Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent pr-12"
+                  placeholder="Enter your password"
+                  required
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={verifying || !password}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {verifying ? 'Verifying...' : 'Verify & Delete'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   const { orders, loading, error, updateOrderStatus, deleteOrder } = useOrders();
+  const { user } = useAuth();
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<'all' | 'dine-in' | 'pickup' | 'delivery' | 'counter'>('all');
   const [sortKey, setSortKey] = useState<'created_at' | 'total' | 'customer_name' | 'status'>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<{ id: string; number: string } | null>(null);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -73,17 +195,51 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       return;
     }
 
-    try {
-      setDeleting(orderId);
-      await deleteOrder(orderId);
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder(null);
-      }
-    } catch (err) {
-      alert('Failed to delete order. Please try again.');
-    } finally {
-      setDeleting(null);
+    // Show password verification modal
+    setOrderToDelete({ id: orderId, number: orderNumber });
+    setShowPasswordModal(true);
+  };
+
+  const verifyPassword = async (password: string): Promise<boolean> => {
+    if (!user?.email) {
+      return false;
     }
+
+    try {
+      // Verify password by attempting to sign in
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: password,
+      });
+
+      if (error) {
+        return false;
+      }
+
+      // Password is correct, proceed with deletion
+      if (orderToDelete) {
+        try {
+          setDeleting(orderToDelete.id);
+          await deleteOrder(orderToDelete.id);
+          if (selectedOrder?.id === orderToDelete.id) {
+            setSelectedOrder(null);
+          }
+        } catch (err) {
+          alert('Failed to delete order. Please try again.');
+        } finally {
+          setDeleting(null);
+        }
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handlePasswordModalClose = () => {
+    setShowPasswordModal(false);
+    setOrderToDelete(null);
   };
 
   const formatDateTime = (dateString: string) => {
@@ -114,10 +270,17 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = statusFilter === 'all' ? orders : orders.filter(o => o.status.toLowerCase() === statusFilter);
+    
+    // Apply status filter
+    let statusFiltered = statusFilter === 'all' ? orders : orders.filter(o => o.status.toLowerCase() === statusFilter);
+    
+    // Apply service type filter
+    let serviceFiltered = serviceTypeFilter === 'all' 
+      ? statusFiltered 
+      : statusFiltered.filter(o => o.service_type === serviceTypeFilter);
     
     // Apply date filters
-    let dateFiltered = base;
+    let dateFiltered = serviceFiltered;
     if (dateFrom) {
       const fromDate = new Date(dateFrom);
       fromDate.setHours(0, 0, 0, 0);
@@ -152,7 +315,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       }
     });
     return sorted;
-  }, [orders, query, statusFilter, sortKey, sortDir, dateFrom, dateTo]);
+  }, [orders, query, statusFilter, serviceTypeFilter, sortKey, sortDir, dateFrom, dateTo]);
 
   const toggleSort = (key: typeof sortKey) => {
     if (sortKey === key) {
@@ -622,6 +785,17 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
+                <select
+                  value={serviceTypeFilter}
+                  onChange={(e) => setServiceTypeFilter(e.target.value as any)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Service Types</option>
+                  <option value="dine-in">Dine-in</option>
+                  <option value="pickup">Pickup</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="counter">Counter</option>
+                </select>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => toggleSort('created_at')}
@@ -1024,6 +1198,14 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
           </div>
         </div>
       )}
+
+      {/* Password Verification Modal */}
+      <PasswordVerificationModal
+        isOpen={showPasswordModal}
+        onClose={handlePasswordModalClose}
+        onVerify={verifyPassword}
+        orderNumber={orderToDelete?.number || ''}
+      />
     </div>
   );
 };
